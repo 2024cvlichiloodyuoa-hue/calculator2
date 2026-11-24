@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Concrete Mix Design Calculator – IS 10262:2019</title>
+<style>
+:root{--bg:#f4f6f8;--cd:#fff;--tx:#1b1f24;--mu:#5b6573;--ac:#0b6e99;--bd:#d6dce3;--ok:#1a7f37;--wa:#b35900;--er:#c62828;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#13171b;--cd:#1c2127;--tx:#e8ecf0;--mu:#9aa5b1;--ac:#4cb3e0;--bd:#323a44;--ok:#4cc26b;--wa:#f0a050;--er:#ff7b72}}
+:root[data-theme="dark"]{--bg:#13171b;--cd:#1c2127;--tx:#e8ecf0;--mu:#9aa5b1;--ac:#4cb3e0;--bd:#323a44;--ok:#4cc26b;--wa:#f0a050;--er:#ff7b72}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header,main{max-width:1000px;margin:0 auto;padding:12px 14px}
+h1{font-size:22px;margin:6px 0}h2{font-size:17px;margin:0 0 10px;color:var(--ac)}
+.card{background:var(--cd);border:1px solid var(--bd);border-radius:10px;padding:14px;margin-bottom:14px}
+.g{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+label{display:flex;flex-direction:column;font-size:12px;color:var(--mu);gap:3px}
+input,select{font:inherit;color:var(--tx);background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:6px;width:100%;min-width:0}
+input[type=checkbox]{width:auto}
+.sc{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{border-bottom:1px solid var(--bd);padding:6px;text-align:left;vertical-align:top}th{color:var(--mu);font-weight:600}
+td input{min-width:70px}
+.b{display:inline-block;font-size:11px;border-radius:9px;padding:1px 7px;color:#fff;margin-right:4px}
+.std{background:#0b6e99}.lab{background:#1a7f37}.ovr{background:#b35900}.prd{background:#6b7280}
+.mu{color:var(--mu)}.ok{color:var(--ok)}.wa{color:var(--wa)}.er{color:var(--er)}
+button{font:inherit;background:var(--ac);color:#fff;border:0;border-radius:6px;padding:7px 12px;margin:3px 4px 3px 0;cursor:pointer}
+button.s{background:var(--mu)}
+canvas{max-height:260px}.cg{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
+@media print{.np{display:none}body{background:#fff;color:#000}.card{break-inside:avoid}}
+</style></head><body>
+<header><h1>Concrete Mix Design Calculator</h1>
+<div class="mu">IS 10262:2019 · IS 456:2000 · IS 383:2016 — BCV503 Assignment 1, NIE Mysuru</div>
+<p><span class="b std">Standard value</span><span class="b lab">Lab result</span><span class="b ovr">Manual override</span><span class="b prd">Predicted (not verified)</span></p></header>
+<main>
+<section class="card dyn"><h2>1 · Design inputs</h2><div class="g" id="din"></div></section>
+<section class="card dyn"><h2>2 · Material database (laboratory test data)</h2><div class="g" id="mat"></div>
+<p class="mu">Replace the placeholder values with your own laboratory results.</p>
+<div class="sc"><table id="sv"></table></div><p id="zinfo"></p></section>
+<section class="card dyn"><h2>3 · Design parameters: recommended vs final (override any value)</h2><div class="sc"><table id="ov"></table></div></section>
+<section class="card"><h2>4 · Final mix proportions</h2><div id="res" class="sc"></div><div id="chk"></div>
+<div class="np"><button onclick="window.print()">Print / Save report as PDF</button><button class="s" onclick="copyTxt()">Copy report text</button></div></section>
+<section class="card"><h2>5 · Trial mixes, experimental data and iteration</h2>
+<div class="g dyn np" id="rates"></div>
+<p class="np"><button onclick="saveTrial()">Save current design as a trial mix</button></p>
+<div class="sc"><table id="tr"></table></div>
+<h3>Recommended next trial</h3><div id="rec"></div>
+<h3>Optimum mix (economy with verified strength, slump and durability)</h3><div id="opt"></div></section>
+<section class="card"><h2>6 · Graphs</h2><p class="mu">Plots use experimentally measured trial data only.</p><div class="cg"><canvas id="c1"></canvas><canvas id="c2"></canvas><canvas id="c3"></canvas><canvas id="c4"></canvas></div></section>
+<section class="card"><details><summary><b>Methodology, equations and programming logic</b></summary>
+<ol>
+<li>Target mean strength: f′ck = max(fck + 1.65 s, fck + X); s and X from the IS 10262:2019 assumed standard deviation table.</li>
+<li>w/c: relationship f′ck = K·(0.5/(w/c))^1.5 fitted to the IS 10262:2019 Fig. 1 curves per cement type (approximation; check against the printed chart), limited by IS 456 Table 5 maximum w/c for the exposure.</li>
+<li>Water: IS 10262:2019 water-content table (50 mm slump, angular aggregate), +3% per 25 mm extra slump, −10 / −20 kg/m³ for sub-angular / rounded aggregate, reduced by the admixture water reduction %.</li>
+<li>Cementitious = water ÷ (w/c), not less than IS 456 Table 5 minimum, flagged above 450 kg/m³ (IS 456 cl. 8.2.4.2).</li>
+<li>Coarse aggregate volume fraction: IS 10262:2019 table by nominal size and IS 383 Table 9 zone of fine aggregate, ±0.01 per 0.05 change of w/c from 0.5, ×0.9 for pumpable concrete.</li>
+<li>Absolute volume: V(agg) = 1 − (V cement + V SCM + V water + V admixture) [− air if selected]. CA = V·fraction·SG·1000; FA = V·(1 − fraction)·SG·1000.</li>
+<li>Moisture correction: dry mass = SSD/(1+abs); field mass = dry·(1+moisture); field water = water − Σ dry·(moisture − abs).</li>
+<li>Iteration: new w/c = w/c·(measured/target)^(1/1.5); water changed 3% per 25 mm slump shortfall or excess; cement = water/w/c. Ec and Fcr are compared with IS 456 (5000√fck, 0.7√fck).</li>
+<li>Table numbers marked as descriptions should be verified against your copy of the codes. Predicted values are never shown as verified; only trials with entered laboratory results count as verified.</li></ol></details></section>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+const $=id=>document.getElementById(id),n=id=>parseFloat($(id).value),f=(x,d=1)=>isFinite(x)?(+x).toFixed(d):'–';
+const EXP=[['Mild',.55,300,20],['Moderate',.50,300,25],['Severe',.45,320,30],['Very severe',.45,340,35],['Extreme',.40,360,40]];
+const WT={10:208,20:186,40:165},AIR={10:1.5,20:1.0,40:.8},KC={OPC43:37,OPC53:42,PPC:34,PSC:33};
+const CAF={IV:{10:.50,20:.66,40:.75},III:{10:.48,20:.64,40:.73},II:{10:.46,20:.62,40:.71},I:{10:.44,20:.60,40:.69}};
+const SV=['40','20','10','4.75','2.36','1.18','0.6','0.3','0.15'],FAD=[100,100,100,96,85,70,50,25,8],CAD=[100,96,35,4,0,0,0,0,0];
+const F=(id,l,v)=>`<label>${l}<input id="${id}" type="number" step="any" value="${v}"></label>`;
+const S=(id,l,o)=>`<label>${l}<select id="${id}">${o.map(x=>`<option value="${x[0]}">${x[1]}</option>`).join('')}</select></label>`;
+const KEYS=[['s','Standard deviation, s','MPa',2,'IS 10262:2019 assumed standard deviation table'],
+['ft','Target mean strength, f′ck','MPa',2,'IS 10262:2019 cl. 4.2: max(fck+1.65s, fck+X)'],
+['wc','Water-cement ratio','',2,'IS 10262:2019 Fig. 1 (fitted) limited by IS 456 Table 5'],
+['water','Water content','kg/m³',0,'IS 10262:2019 water content table, +3%/25 mm slump, shape and admixture adjustments'],
+['cem','Cementitious content','kg/m³',0,'water ÷ w/c; min per IS 456 Table 5; max 450 (IS 456 cl. 8.2.4.2)'],
+['caf','Coarse aggregate volume fraction','',3,'IS 10262:2019 CA volume table with zone (IS 383 Table 9) and w/c correction'],
+['air','Entrapped air','%',1,'IS 10262:2019 entrapped air table']];
+let R={},D={},T=[],CH=[];try{T=JSON.parse(localStorage.getItem('cmd_t')||'[]')}catch(e){}
+$('din').innerHTML=S('grade','Concrete grade',[20,25,30,35,40,45,50].map(x=>[x,'M'+x]))+S('expo','Exposure condition (RCC)',EXP.map((e,i)=>[i,e[0]]))+S('size','Nominal max. aggregate size',[[10,'10 mm'],[20,'20 mm'],[40,'40 mm']])+F('slump','Target slump (mm)',100)+S('ct','Cement type',[['OPC43','OPC 43 grade'],['OPC53','OPC 53 grade'],['PPC','PPC'],['PSC','PSC']])+S('shape','Coarse aggregate shape',[[0,'Angular'],[1,'Sub-angular'],[2,'Gravel / rounded']])+F('scm','Fly ash / SCM (% of cementitious)',0)+F('adm','Admixture dosage (% by mass of cementitious)',0)+F('wr','Admixture water reduction (%)',0)+F('sga','Admixture specific gravity',1.08)+`<label>Pumpable concrete (CA ×0.9)<input type="checkbox" id="pump"></label><label>Deduct entrapped air from volume<input type="checkbox" id="airc"></label>`;
+$('mat').innerHTML=F('sgc','Cement SG',3.15)+F('sgs','Fly ash / SCM SG',2.2)+F('sgf','Fine aggregate SG',2.65)+F('sgca','Coarse aggregate SG',2.7)+F('aF','FA water absorption (%)',1)+F('aC','CA water absorption (%)',.5)+F('mF','FA moisture content (%)',2)+F('mC','CA moisture content (%)',0)+S('zone','FA grading zone',[['auto','Auto (from sieve data)'],['I','Zone I'],['II','Zone II'],['III','Zone III'],['IV','Zone IV']]);
+$('sv').innerHTML='<tr><th>Sieve (mm)</th><th>Fine agg. % passing</th><th>Coarse agg. % passing</th></tr>'+SV.map((s,i)=>`<tr><td>${s}</td><td><input type="number" id="fa_${s}" value="${FAD[i]}"></td><td><input type="number" id="ca_${s}" value="${CAD[i]}"></td></tr>`).join('');
+$('ov').innerHTML='<tr><th>Parameter</th><th>Recommended</th><th>Override</th><th>Final</th><th>Source</th></tr>'+KEYS.map(k=>`<tr><td>${k[1]}${k[2]?' ('+k[2]+')':''}</td><td id="rc_${k[0]}"></td><td><input type="number" step="any" id="o_${k[0]}" placeholder="auto"></td><td id="fv_${k[0]}"></td><td id="sr_${k[0]}"></td></tr>`).join('');
+$('rates').innerHTML=F('r_c','Cement ₹/kg',7)+F('r_s','Fly ash ₹/kg',2)+F('r_f','Fine agg. ₹/kg',1.2)+F('r_ca','Coarse agg. ₹/kg',.9)+F('r_a','Admixture ₹/kg',100)+F('r_w','Water ₹/kg',.05);
+$('grade').value=25;$('expo').value=1;$('size').value=20;
+function pick(k,rec){const o=$('o_'+k).value,m=o!==''&&isFinite(+o);return R[k]={rec,val:m?+o:rec,src:m?'ovr':'std'}}
+function calc(){
+ const g=n('grade'),e=EXP[+$('expo').value],sz=$('size').value,sl=n('slump'),K=KC[$('ct').value];
+ const zp=n('fa_0.6'),za=zp>=80?'IV':zp>=60?'III':zp>=35?'II':zp>=15?'I':'out of range';
+ const zone=$('zone').value=='auto'?(za=='out of range'?'II':za):$('zone').value;
+ $('zinfo').innerHTML='Fine aggregate: 600 µm passing '+f(zp,0)+'% → grading zone <b>'+za+'</b> (IS 383 Table 9); zone used in design: <b>'+zone+'</b>';
+ R={};const s=pick('s',g<=15?3.5:g<=25?4:5).val,X=g<=15?5:g<=25?5.5:6.5;
+ const ft=pick('ft',Math.max(g+1.65*s,g+X)).val;
+ const wc=pick('wc',Math.min(+(.5*Math.pow(K/ft,2/3)).toFixed(2),e[1])).val;
+ let w=(WT[sz]*(1+.03*(sl-50)/25)+[0,-10,-20][$('shape').value])*(1-n('wr')/100);
+ const wt=pick('water',Math.round(w)).val,cem=pick('cem',Math.round(Math.max(wt/wc,e[2]))).val;
+ const caf=pick('caf',+((CAF[zone][sz]+(.5-wc)/.05*.01)*($('pump').checked?.9:1)).toFixed(3)).val,air=pick('air',AIR[sz]).val;
+ KEYS.forEach(k=>{const r=R[k[0]];$('rc_'+k[0]).textContent=f(r.rec,k[3]);$('fv_'+k[0]).innerHTML='<b>'+f(r.val,k[3])+'</b>';$('sr_'+k[0]).innerHTML=`<span class="b ${r.src}">${r.src=='ovr'?'Manual override':'Standard'}</span> <span class="mu">${k[4]}</span>`});
+ const sp=n('scm')/100,C=cem*(1-sp),SC=cem*sp,ad=cem*n('adm')/100;
+ const Vc=C/(n('sgc')*1e3),Vs=SC/(n('sgs')*1e3),Va=ad/(n('sga')*1e3),Vg=1-(Vc+Vs+wt/1e3+Va)-($('airc').checked?air/100:0);
+ const CA=Vg*caf*n('sgca')*1e3,FA=Vg*(1-caf)*n('sgf')*1e3,aF=n('aF'),aC=n('aC'),mF=n('mF'),mC=n('mC');
+ const dF=FA/(1+aF/100),dC=CA/(1+aC/100),fF=dF*(1+mF/100),fC=dC*(1+mC/100),wf=wt-dF*(mF-aF)/100-dC*(mC-aC)/100;
+ D={g,wc:wt/cem,wt,cem,C,SC,FA,CA,ad,fF,fC,wf,ft,sl,maxwc:e[1],mincem:e[2],admp:n('adm'),caf,zone,Vc,Vs,Va,Vg};
+ const rows=[['Cement',C,C,Vc],['Fly ash / SCM',SC,SC,Vs],['Water',wt,wf,wt/1e3],['Fine aggregate',FA,fF,FA/(n('sgf')*1e3)],['Coarse aggregate',CA,fC,CA/(n('sgca')*1e3)],['Admixture',ad,ad,Va]];
+ const tot=rows.reduce((a,r)=>a+r[1],0),totf=rows.reduce((a,r)=>a+r[2],0);
+ $('res').innerHTML='<table><tr><th>Material</th><th>SSD (kg/m³)</th><th>Field, moisture-corrected (kg/m³)</th><th>Abs. volume (m³)</th><th>Ratio by mass</th></tr>'+rows.map(r=>`<tr><td>${r[0]}</td><td>${f(r[1])}</td><td>${f(r[2])}</td><td>${f(r[3],4)}</td><td>${f(r[1]/cem,2)}</td></tr>`).join('')+`<tr><th>Total</th><th>${f(tot)}</th><th>${f(totf)}</th><th></th><th></th></tr></table><p>Final w/c = <b>${f(D.wc,3)}</b> · Mix (cementitious : FA : CA) = <b>1 : ${f(FA/cem,2)} : ${f(CA/cem,2)}</b> · <span class="b prd">Predicted, not experimentally verified</span></p>`;
+ const ck=[[D.wc<=e[1]+1e-9,`w/c ${f(D.wc,3)} ≤ ${e[1]} (IS 456 Table 5, ${e[0]})`],[cem>=e[2],`Cementitious ${f(cem,0)} ≥ ${e[2]} kg/m³ (IS 456 Table 5)`],[cem<=450,'Cementitious ≤ 450 kg/m³ (IS 456 cl. 8.2.4.2)'],[g>=e[3],`Grade M${g} ≥ minimum M${e[3]} for ${e[0]} exposure`],[Vg>0,'Aggregate volume positive'],[za!='out of range','Fine aggregate within IS 383 grading zones']];
+ $('chk').innerHTML=ck.map(c=>`<div class="${c[0]?'ok':'er'}">${c[0]?'✔':'⚠'} ${c[1]}</div>`).join('');
+}
+const rate=()=>({c:n('r_c'),s:n('r_s'),f:n('r_f'),ca:n('r_ca'),a:n('r_a'),w:n('r_w')});
+const cost=t=>{const r=rate();return t.C*r.c+t.SC*r.s+t.FA*r.f+t.CA*r.ca+t.ad*r.a+t.wt*r.w};
+const okT=t=>t.fck!==''&&t.slump!==''&&t.fck>=t.ft&&t.slump>=t.sl-10&&t.slump<=t.sl+25&&t.wc<=t.maxwc+1e-6&&t.cem>=t.mincem;
+function saveTrial(){T.push({...D,label:'Trial '+(T.length+1),fck:'',ec:'',fcr:'',slump:''});persist();render()}
+function persist(){try{localStorage.setItem('cmd_t',JSON.stringify(T))}catch(e){}}
+function up(i,k,v){T[i][k]=v===''?'':+v;persist();render()}
+function del(i){T.splice(i,1);persist();render()}
+function renderTrials(){
+ const inp=(i,k,t)=>`<td><input type="number" step="any" value="${t[k]}" onchange="up(${i},'${k}',this.value)"></td>`;
+ $('tr').innerHTML='<tr><th>Trial</th><th>w/c</th><th>Water</th><th>Cementitious</th><th>SP %</th><th>Cost ₹/m³</th><th>fck avg (MPa)</th><th>Ec (MPa)</th><th>Fcr (MPa)</th><th>Slump (mm)</th><th>Status</th><th></th></tr>'+(T.length?T.map((t,i)=>{const v=t.fck!==''&&t.slump!=='';return `<tr><td>${t.label}</td><td>${f(t.wc,3)}</td><td>${f(t.wt,0)}</td><td>${f(t.cem,0)}</td><td>${f(t.admp,2)}</td><td>${f(cost(t),0)}</td>${inp(i,'fck',t)}${inp(i,'ec',t)}${inp(i,'fcr',t)}${inp(i,'slump',t)}<td>${v?(okT(t)?'<span class="ok">Verified: meets targets</span>':'<span class="er">Verified: fails a target</span>'):'<span class="b prd">Predicted, not verified</span>'}</td><td><button class="s np" onclick="del(${i})">✕</button></td></tr>`}).join(''):'<tr><td colspan="12" class="mu">No trials yet. Save the current design as a trial, cast and test it, then enter the results here.</td></tr>');
+}
+function rec(){
+ const V=T.filter(t=>t.fck!==''&&t.slump!=='');
+ if(!V.length){$('rec').innerHTML='<p class="mu">Enter fck and slump (and Ec, Fcr) for a trial to get the next-trial recommendation.</p>';return}
+ const t=V[V.length-1],L=[],r=t.fck/t.ft;let wc=t.wc,w=t.wt;
+ if(r<1){wc=t.wc*Math.pow(r,1/1.5);L.push(`Strength ${f(t.fck)} MPa is below target mean ${f(t.ft)} MPa: reduce w/c to about ${f(wc,2)}.`)}
+ else if(r>1.1){wc=t.wc*Math.pow(r/1.05,1/1.5);L.push(`Strength is ${f((r-1)*100,0)}% above target: raise w/c (capped at ${t.maxwc}) for economy.`)}
+ else L.push('Strength adequate (0–10% above target): keep w/c.');
+ wc=Math.min(+wc.toFixed(2),t.maxwc);
+ const d=t.sl-t.slump;
+ if(Math.abs(d)>10){w=t.wt*(1+.03*d/25);L.push(`Slump ${f(t.slump,0)} mm vs target ${f(t.sl,0)} mm: ${d>0?'increase':'reduce'} water to about ${f(w,0)} kg/m³ (3% per 25 mm), or ${d>0?'increase':'reduce'} the superplasticiser dosage (current ${f(t.admp,2)}%) and re-check, which avoids extra cement.`)}else L.push('Slump satisfactory: keep water content.');
+ const c=Math.max(w/wc,t.mincem);L.push(`Resulting cementitious content ≈ ${f(c,0)} kg/m³ (was ${f(t.cem,0)}).`+(c>450?' <span class="er">Exceeds 450 kg/m³: use a water-reducing admixture or SCM instead.</span>':''));
+ if(d>25)L.push('If the mix looks harsh or segregates, shift 1–2% of aggregate volume from coarse to fine (reduce CA fraction by 0.01–0.02).');
+ const ec=5000*Math.sqrt(t.g),fr=.7*Math.sqrt(t.g);
+ if(t.ec!=='')L.push(`Ec measured ${f(t.ec,0)} MPa vs IS 456 estimate ${f(ec,0)} MPa (${f(t.ec/ec*100,0)}%).`);
+ if(t.fcr!=='')L.push(`Fcr measured ${f(t.fcr,2)} MPa vs IS 456 estimate ${f(fr,2)} MPa (${f(t.fcr/fr*100,0)}%).`);
+ $('rec').innerHTML=`<p class="mu">Based on ${t.label}.</p><ul>${L.map(x=>'<li>'+x+'</li>').join('')}</ul><button class="np" onclick="apply(${Math.round(w)},${wc})">Apply to design (sets water and w/c overrides)</button>`;
+ const ok=V.filter(okT).sort((a,b)=>cost(a)-cost(b));
+ $('opt').innerHTML=ok.length?`<b>${ok[0].label}</b>: w/c ${f(ok[0].wc,3)}, cementitious ${f(ok[0].cem,0)} kg/m³, ${f(ok[0].fck)} MPa, slump ${f(ok[0].slump,0)} mm, cost ₹${f(cost(ok[0]),0)}/m³ <span class="b lab">Experimentally verified</span>`:'<span class="mu">No verified trial meets strength, slump and durability yet. Predicted mixes are not shown as optimum.</span>';
+}
+function apply(w,wc){$('o_water').value=w;$('o_wc').value=wc;calc();window.scrollTo({top:0,behavior:'smooth'})}
+function draw(){
+ if(typeof Chart==='undefined')return;CH.forEach(c=>c.destroy());CH=[];
+ const cs=getComputedStyle(document.documentElement);Chart.defaults.color=cs.getPropertyValue('--tx');Chart.defaults.borderColor=cs.getPropertyValue('--bd');
+ const V=T.filter(t=>t.fck!==''&&t.slump!=='');
+ const sc=(id,ti,xl,yl,fn)=>CH.push(new Chart($(id),{type:'scatter',data:{datasets:[{label:ti,data:V.map(fn),backgroundColor:'#0b8fc9',pointRadius:6}]},options:{plugins:{title:{display:true,text:ti}},scales:{x:{title:{display:true,text:xl}},y:{title:{display:true,text:yl}}}}}));
+ sc('c1','Water-cement ratio vs strength','w/c','fck avg (MPa)',t=>({x:+t.wc.toFixed(3),y:t.fck}));
+ sc('c2','Water content vs slump','Water (kg/m³)','Slump (mm)',t=>({x:t.wt,y:t.slump}));
+ sc('c3','Material cost vs strength','Cost (₹/m³)','fck avg (MPa)',t=>({x:Math.round(cost(t)),y:t.fck}));
+ CH.push(new Chart($('c4'),{data:{labels:V.map(t=>t.label),datasets:[{type:'bar',label:'Measured fck',data:V.map(t=>t.fck),backgroundColor:'#0b8fc9'},{type:'bar',label:'Target mean',data:V.map(t=>t.ft),backgroundColor:'#9aa5b1'},{type:'line',label:'Slump (mm)',data:V.map(t=>t.slump),yAxisID:'y1',borderColor:'#f0a050'}]},options:{plugins:{title:{display:true,text:'Performance comparison of trials'}},scales:{y:{title:{display:true,text:'MPa'}},y1:{position:'right',grid:{drawOnChartArea:false},title:{display:true,text:'mm'}}}}}));
+}
+function render(){renderTrials();rec();draw()}
+function copyTxt(){const d=D,t=`CONCRETE MIX DESIGN (IS 10262:2019) – M${d.g}, w/c ${f(d.wc,3)}, target mean ${f(d.ft,2)} MPa\nSSD kg/m³: cement ${f(d.C)}, SCM ${f(d.SC)}, water ${f(d.wt)}, FA ${f(d.FA)}, CA ${f(d.CA)}, admixture ${f(d.ad,2)}\nField kg/m³: water ${f(d.wf)}, FA ${f(d.fF)}, CA ${f(d.fC)}\nPredicted values; not experimentally verified until trial results are entered.`;try{navigator.clipboard.writeText(t)}catch(e){}}
+document.addEventListener('input',e=>{if(e.target.closest('.dyn')){calc();if(e.target.id.startsWith('r_'))render()}});
+calc();render();
+</script></body></html>
